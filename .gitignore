@@ -1,4 +1,5 @@
-conversation_history.json
-.DS_Store
-downloaded_photos
-secrets.json
+.DS_STORE
+config/secrets.json
+resources/conversation_history.json
+resources/downloaded_photos
+core/__pycache__
