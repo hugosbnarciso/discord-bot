@@ -158,7 +158,7 @@ async def abed(ctx, *, question: str):
 
         # Iterate through the entities and check if the reply matches fully or partially to any of the entities
         matched_entity = None
-        allowed_entity_types = ("light", "fan", "binary_sensor", "lock")
+        allowed_entity_types = ("light", "fan", "binary_sensor", "lock", "person")
 
         for entity in entities:
             entity_id = entity.get("entity_id", "")
