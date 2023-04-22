@@ -1,7 +1,9 @@
 import aiohttp
 import json
+import logging #for verbose
 import ssl
 
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s') #VERBOSE
 
 # Read secrets.json
 with open('config/secrets.json', 'r') as f:
@@ -26,11 +28,12 @@ async def fetch_all_entities():
         async with session.get(HOMEASSISTANT_URL, headers=headers) as resp:
             if resp.status == 200:
                 response_text = await resp.text()
+                logging.warning(f'RAW RESPONSE: {response_text}') ##DEBUG
                 data = await resp.json(content_type="application/json")
-                print(f'Home Assistant fetch_all_entities success!') ##DEBUG
+                logging.info(f'Home Assistant fetch_all_entities success!') ##DEBUG
                 return data
             else:
-                print(f'Home Assistant fetch_all_entities failed! {resp.reason}') ##DEBUG
+                logging.error(f'Home Assistant fetch_all_entities failed! {resp.reason}') ##DEBUG
                 return None
 
 def find_entity_by_friendly_name(entities, search_name):

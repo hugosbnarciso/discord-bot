@@ -1,4 +1,5 @@
 import os
+import logging
 import discord
 from discord.ext import commands
 import openai
@@ -17,6 +18,9 @@ openai.api_key = secrets["OPENAI_API_KEY"]
 HOMEASSISTANT_API_KEY = secrets['HOMEASSISTANT_API_KEY']
 HOMEASSISTANT_URL = secrets['HOMEASSISTANT_URL']
 
+# Set up logging
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s') #VERBOSE
+
 # Discord intents
 intents = discord.Intents.default()
 intents.messages = True
@@ -29,7 +33,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # Bot event: on_ready
 # Triggered when the bot is connected and ready to receive messages@bot.event
 async def on_ready():
-    print(f'{bot.user} has connected to Discord!') ##DEBUG
+    logging.info(f'{bot.user} has connected to Discord!') ##DEBUG
 
 # Define the last_message_id dictionary to store the last message ID for each channel
 last_message_id = {}
@@ -49,7 +53,7 @@ async def fetch_and_update_channel_history(channel_id):
         after = None
 
     async for message in channel.history(limit=100, after=after):  # change limit to go back x in time - None for no limit
-        print(f"FETCHING HISTORY") ##DEBUG
+        logging.info(f"FETCHING HISTORY") ##DEBUG
         timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
         message_entry = f"{timestamp} | {message.author.display_name}: {message.content}"
         if message_entry not in local_history[channel_id]:
@@ -118,7 +122,7 @@ async def download_photos(ctx):
 # !ABED
 @bot.command()
 async def abed(ctx, *, question: str):
-    print(f'QUESTION: {question}') ##DEBUG
+    logging.info(f'QUESTION: {question}') ##DEBUG
     user_name = ctx.author.display_name
     channel_id = ctx.channel.id
 
@@ -132,7 +136,7 @@ async def abed(ctx, *, question: str):
 
     prompt = read_prompt("config/prompt.txt")  # Read the prompt from the file
     prompt += "\n\n" + "\n".join(local_history[channel_id]) + "\n"
-    print(f"PROMPT: {prompt}") ##DEBUG
+    logging.warning(f"PROMPT: {prompt}") ##DEBUG
 
     response = openai.Completion.create(
         engine="text-davinci-003",
@@ -150,7 +154,7 @@ async def abed(ctx, *, question: str):
     try:
         # Fetch all entities from the Home Assistant API
         entities = await fetch_all_entities()  # Use the API key from the secrets file
-        print(f'{entities}') ##DEBUG
+        logging.info(f'{entities}') ##DEBUG
 
         # Iterate through the entities and check if the reply matches fully or partially to any of the entities
         matched_entity = None
@@ -165,11 +169,11 @@ async def abed(ctx, *, question: str):
 
             attributes = entity.get("attributes", {})
             friendly_name = attributes.get("friendly_name", "").lower()
-            print(f'FOUND FRIENDLY NAME: {friendly_name}') ##DEBUG
+            logging.info(f'FOUND FRIENDLY NAME: {friendly_name}') ##DEBUG
 
             if friendly_name in reply.lower():
                 matched_entity = entity
-                print(f'MATCHED ENTITY: {matched_entity}') ##DEBUG
+                logging.info(f'MATCHED ENTITY: {matched_entity}') ##DEBUG
                 break
 
         # If a matching entity is found, add its state to the reply
