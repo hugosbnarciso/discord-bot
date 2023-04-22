@@ -28,7 +28,6 @@ async def fetch_all_entities():
         async with session.get(HOMEASSISTANT_URL, headers=headers) as resp:
             if resp.status == 200:
                 response_text = await resp.text()
-                logging.debug(f'RAW RESPONSE: {response_text}') ##DEBUG
                 data = await resp.json(content_type="application/json")
                 logging.debug(f'Home Assistant fetch_all_entities success!') ##DEBUG
                 return data
