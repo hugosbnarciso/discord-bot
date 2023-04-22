@@ -19,7 +19,7 @@ HOMEASSISTANT_API_KEY = secrets['HOMEASSISTANT_API_KEY']
 HOMEASSISTANT_URL = secrets['HOMEASSISTANT_URL']
 
 # Set up logging
-logging.basicConfig(level=logging.ERROR, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s') #VERBOSE
+logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s') #VERBOSE
 
 # Discord intents
 intents = discord.Intents.default()

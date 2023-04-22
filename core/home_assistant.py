@@ -3,7 +3,7 @@ import json
 import logging #for verbose
 import ssl
 
-logging.basicConfig(level=logging.ERROR, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s') #VERBOSE
+logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s') #VERBOSE
 
 # Read secrets.json
 with open('config/secrets.json', 'r') as f:
