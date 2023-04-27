@@ -1,47 +1,49 @@
 import os
 import logging
 import discord
-from discord.ext import commands
 import openai
 from collections import defaultdict
 import json
-from core.home_assistant import fetch_all_entities, find_entity_by_friendly_name
+from discord.ext import commands
+from core.download_photos import download_photos
+from discord import Intents
 
-# Read the secrets.json file
+# Read the secrets.json file which contains API keys and tokens
 with open('config/secrets.json', 'r') as f:
     secrets = json.load(f)
 
-# Set Tokens and API Keys
+# Set tokens and API keys from the secrets file
 DISCORD_BOT_TOKEN = secrets["DISCORD_BOT_TOKEN"]
 DISCORD_CHANNEL_ID = secrets["DISCORD_CHANNEL_ID"]
 openai.api_key = secrets["OPENAI_API_KEY"]
+MAX_TOKENS = 4096  # Or whatever maximum token limit you want to set - 4096 MAX , 250 ANSWER
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s') #VERBOSE
+# Set up logging to output information about the bot's actions and events
+logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 
-# Discord intents
-intents = discord.Intents.default()
+# Define the Discord intents for the bot. Intents define what events the bot will listen for.
+intents = Intents.default()
 intents.messages = True
 intents.guilds = True
 intents.message_content = True 
 
-# Create a bot instance and set the command predix
+# Create an instance of the bot with the specified command prefix and intents
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Bot event: on_ready
-# Triggered when the bot is connected and ready to receive messages@bot.event
+# Event that runs when the bot is ready and connected to Discord
+@bot.event
 async def on_ready():
-    logging.info(f'{bot.user} has connected to Discord!') ##DEBUG
+    logging.info(f'{bot.user} has connected to Discord!')
 
-# Define the last_message_id dictionary to store the last message ID for each channel
+# Define a dictionary to store the last message ID for each channel
 last_message_id = {}
 
-# Read the prompt from a file
+# Function to read the prompt from a file
 def read_prompt(file_name):
     with open(file_name, "r") as f:
         return f.read()
 
-# Fetch and update channel history
+# Function to fetch and update the channel history
 async def fetch_and_update_channel_history(channel_id):
     channel = bot.get_channel(channel_id)
     last_id = last_message_id.get(channel_id)
@@ -51,90 +53,66 @@ async def fetch_and_update_channel_history(channel_id):
         after = None
 
     async for message in channel.history(limit=100, after=after):  # change limit to go back x in time - None for no limit
-        logging.info(f"FETCHING HISTORY") ##DEBUG
+        logging.info(f"FETCHING HISTORY") 
         timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
         message_entry = f"{timestamp} | {message.author.display_name}: {message.content}"
         if message_entry not in local_history[channel_id]:
             local_history[channel_id].append(message_entry)
             last_message_id[channel_id] = message.id
 
-# Load conversation history from a file
+# Function to load the conversation history from a file
 def load_conversation_history(file_name):
     try:
         with open(file_name, 'r') as f:
             history = json.load(f)
     except FileNotFoundError:
         history = {}
-
-
     loaded_history = defaultdict(list, {int(k): v for k, v in history.items()})
     return loaded_history
 
-# Save conversation history to a file
+# Function to save the conversation history to a file
 def save_conversation_history(file_path, history):
     with open(file_path, 'w') as f:
         json.dump(history, f)
 
-# Load conversation history
-#conversation_history = load_conversation_history('conversation_history.json')
-local_history = load_conversation_history('resources/conversation_history.json')        
-
-# Load conversation history
-#conversation_history = load_conversation_history('conversation_history.json')
+# Load the conversation history
 local_history = load_conversation_history('resources/conversation_history.json')
 
-# Update conversation history on receiving a message
+# Event that runs when a message is received
 @bot.event
 async def on_message(message):
-    if message.author.bot and message.author != bot.user:   #switch to not ignore other bots
-#    if message.author.id == bot.user.id:                   #switch to not ignore other bots
+    # Do not process commands if they are coming from a bot
+    if message.author.bot and message.author != bot.user:   
+        return
+    
+    # Check if the message is a command
+    if message.content.startswith('!'):
+        await bot.process_commands(message)
         return
 
+    # Add the message to the history
     channel_id = message.channel.id
-    if channel_id not in local_history:
-        local_history[channel_id] = []
-
-
     timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
-    local_history[channel_id].append(f"{timestamp} | {message.author.display_name}: {message.content}")
-
-    # Save the updated conversation history
+    message_entry = f"{timestamp} | {message.author.display_name}: {message.content}"
+    local_history[channel_id].append(message_entry)
+    last_message_id[channel_id] = message.id
     save_conversation_history('resources/conversation_history.json', local_history)
 
-    # Process the bot commands
-    await bot.process_commands(message)
+# Command to ask the bot a question
+@bot.command(name='abed', help='Ask Abed a question')
+async def abed(ctx, *, question):
+    # Fetch the channel history
+    await fetch_and_update_channel_history(ctx.channel.id)
 
-# Command: !download_photos
-@bot.command()
-async def download_photos(ctx):
-    if ctx.channel.id == DISCORD_CHANNEL_ID:
-        channel = ctx.channel
-        async for message in channel.history(limit=500): #change limit to go back x in time - None for no limit
-            for attachment in message.attachments:
-                if attachment.filename.lower().endswith(('.jpg', '.jpeg', '.png', '.gif')):
-                    timestamp = message.created_at.strftime("%Y%m%d_%H%M%S")
-                    new_filename = f'{timestamp}_{attachment.filename}'
-                    await attachment.save(f'./downloaded_photos/{new_filename}')
-                    logging.info(f'Saved {new_filename}') ##DEBUG
+    # Construct the conversation
+    conversation = '\n'.join(local_history[ctx.channel.id])
 
-# !ABED
-@bot.command()
-async def abed(ctx, *, question: str):
-    logging.debug(f'QUESTION: {question}')  # DEBUG
-    user_name = ctx.author.display_name
-    channel_id = ctx.channel.id
+    # Truncate the conversation to fit within the model's maximum token limit
+    conversation = conversation[-MAX_TOKENS:]
 
-    if channel_id not in local_history:
-        local_history[channel_id] = [] 
-    await fetch_and_update_channel_history(channel_id)  # Fetch the channel history if it's not in the local history
-
-    # Add the current question to the local history
-    timestamp = ctx.message.created_at.strftime("%Y-%m-%d %H:%M:%S")
-    local_history[channel_id].append(f"{timestamp} | {user_name}: {question}")
-
-    prompt = read_prompt("config/prompt.txt")  # Read the prompt from the file
-    prompt += "\n\n" + "\n".join(local_history[channel_id]) + "\n"
-    logging.debug(f"PROMPT: {prompt}")  # DEBUG
+    # Define the prompt
+    prompt = f'{conversation}\n{ctx.message.author.display_name}: {question}'
+    # Use OpenAI to generate a response to the question
 
     response = openai.Completion.create(
         engine="text-davinci-003",
@@ -142,16 +120,19 @@ async def abed(ctx, *, question: str):
         max_tokens=250,
         n=1,
         stop=None,
-        temperature=0.7,
-        # (0.1), the response is more focused and concise. (0.5), the answer is more detailed and covers more destinations. (1.0),more creative and provides richer descriptions
+        temperature=0.7, # (0.1), the response is more focused and concise. (0.5), the answer is more detailed and covers more destinations. (1.0),more creative and provides richer descriptions
     )
-
     reply = response.choices[0].text.strip()
 
-    # Remove the timestamp from the reply
+    # Remove the timestamp and Abed: from the reply
     reply = reply.split('Abed:', 1)[-1].strip()
-        
-    await ctx.send(reply)
-    save_conversation_history('resources/conversation_history.json', local_history)
 
+    # Check if the reply is empty
+    if not reply:
+        reply = "Sorry, I glitched for a moment. Please ask again"
+
+    # Send the response as a message
+    await ctx.send(reply)
+        
+# Run the bot
 bot.run(DISCORD_BOT_TOKEN)
