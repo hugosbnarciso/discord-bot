@@ -15,8 +15,6 @@ with open('config/secrets.json', 'r') as f:
 DISCORD_BOT_TOKEN = secrets["DISCORD_BOT_TOKEN"]
 DISCORD_CHANNEL_ID = secrets["DISCORD_CHANNEL_ID"]
 openai.api_key = secrets["OPENAI_API_KEY"]
-HOMEASSISTANT_API_KEY = secrets['HOMEASSISTANT_API_KEY']
-HOMEASSISTANT_URL = secrets['HOMEASSISTANT_URL']
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s') #VERBOSE
@@ -122,7 +120,7 @@ async def download_photos(ctx):
 # !ABED
 @bot.command()
 async def abed(ctx, *, question: str):
-    logging.info(f'QUESTION: {question}') ##DEBUG
+    logging.debug(f'QUESTION: {question}')  # DEBUG
     user_name = ctx.author.display_name
     channel_id = ctx.channel.id
 
@@ -136,7 +134,7 @@ async def abed(ctx, *, question: str):
 
     prompt = read_prompt("config/prompt.txt")  # Read the prompt from the file
     prompt += "\n\n" + "\n".join(local_history[channel_id]) + "\n"
-    logging.warning(f"PROMPT: {prompt}") ##DEBUG
+    logging.debug(f"PROMPT: {prompt}")  # DEBUG
 
     response = openai.Completion.create(
         engine="text-davinci-003",
@@ -145,50 +143,10 @@ async def abed(ctx, *, question: str):
         n=1,
         stop=None,
         temperature=0.7,
-        #(0.1), the response is more focused and concise. (0.5), the answer is more detailed and covers more destinations. (1.0),more creative and provides richer descriptions
+        # (0.1), the response is more focused and concise. (0.5), the answer is more detailed and covers more destinations. (1.0),more creative and provides richer descriptions
     )
 
     reply = response.choices[0].text.strip()
-
-### HOME ASSISTANT ###
-    try:
-        # Fetch all entities from the Home Assistant API
-        entities = await fetch_all_entities()  # Use the API key from the secrets file
-        logging.info(f'{entities}') ##DEBUG
-
-        # Iterate through the entities and check if the reply matches fully or partially to any of the entities
-        matched_entity = None
-        allowed_entity_types = ("light", "fan", "binary_sensor", "lock", "person")
-
-        for entity in entities:
-            entity_id = entity.get("entity_id", "")
-            entity_type = entity_id.split(".")[0]
-
-            if entity_type not in allowed_entity_types:
-                continue
-
-            attributes = entity.get("attributes", {})
-            friendly_name = attributes.get("friendly_name", "").lower()
-            logging.info(f'FOUND FRIENDLY NAME: {friendly_name}') ##DEBUG
-
-            if friendly_name in reply.lower():
-                matched_entity = entity
-                logging.info(f'MATCHED ENTITY: {matched_entity}') ##DEBUG
-                break
-
-        # If a matching entity is found, add its state to the reply
-        if matched_entity:
-            search_name = matched_entity["attributes"]["friendly_name"]
-            entity_id = matched_entity["entity_id"]
-            entity_state = matched_entity["state"]
-
-            reply += f" The current state of the {search_name} is '{entity_state}'."
-#        else:
-#            reply += f" I couldn't find an entity with a name matching the reply."
-    
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
-        reply = "I'm sorry, but I couldn't process your request. I'm taking a nap"
 
     # Remove the timestamp from the reply
     reply = reply.split('Abed:', 1)[-1].strip()
