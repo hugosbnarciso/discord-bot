@@ -2,6 +2,8 @@ import os
 import logging
 import discord
 import openai
+import pytz
+import datetime
 from collections import defaultdict
 import json
 from discord.ext import commands
@@ -17,9 +19,11 @@ DISCORD_BOT_TOKEN = secrets["DISCORD_BOT_TOKEN"]
 DISCORD_CHANNEL_ID = secrets["DISCORD_CHANNEL_ID"]
 openai.api_key = secrets["OPENAI_API_KEY"]
 MAX_TOKENS = 4096  # Or whatever maximum token limit you want to set - 4096 MAX , 250 ANSWER
+TIMEZONE = secrets["TIMEZONE"]
 
 # Set up logging to output information about the bot's actions and events
-logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s: %(message)s')
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 
 # Define the Discord intents for the bot. Intents define what events the bot will listen for.
 intents = Intents.default()
@@ -46,19 +50,38 @@ def read_prompt(file_name):
 # Function to fetch and update the channel history
 async def fetch_and_update_channel_history(channel_id):
     channel = bot.get_channel(channel_id)
-    last_id = last_message_id.get(channel_id)
-    if last_id:
-        after = discord.Object(id=last_id)
-    else:
-        after = None
+#2    # last_id = last_message_id.get(channel_id)
+    # if last_id:
+    #     after = discord.Object(id=last_id)
+    # else:
+    #     after = None
+   
+    # Initialize a temporary list to hold the new history
+    new_history = []
 
-    async for message in channel.history(limit=100, after=after):  # change limit to go back x in time - None for no limit
-        logging.info(f"FETCHING HISTORY") 
-        timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
+    # Use the .history() method without the after parameter, and set the limit to xxx
+    async for message in channel.history(limit=100):  # change limit to go back x in time - None for no limit
+
+        # Convert the timestamp to your desired timezone
+        desired_tz = pytz.timezone(TIMEZONE)  # replace with your timezone 
+        utc_time = message.created_at.replace(tzinfo=pytz.utc)  # Specify that this is a UTC datetime
+        local_time = utc_time.astimezone(desired_tz)
+        timestamp = local_time.strftime("%Y-%m-%d %H:%M") # to add seconds - ("%Y-%m-%d %H:%M:%S")
+        logging.info(f"FETCHING: {timestamp} | {message.author.display_name}: {message.content}") 
+
+ ##1       timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
         message_entry = f"{timestamp} | {message.author.display_name}: {message.content}"
-        if message_entry not in local_history[channel_id]:
-            local_history[channel_id].append(message_entry)
-            last_message_id[channel_id] = message.id
+        new_history.append(message_entry)
+
+    # Reverse the new_history list to keep messages in chronological order
+    new_history.reverse()
+
+   #2     # if message_entry not in local_history[channel_id]:
+        #     local_history[channel_id].append(message_entry)
+        #     last_message_id[channel_id] = message.id
+
+    # Replace the old history with the new history
+    local_history[channel_id] = new_history
 
 # Function to load the conversation history from a file
 def load_conversation_history(file_name):
@@ -92,7 +115,13 @@ async def on_message(message):
 
     # Add the message to the history
     channel_id = message.channel.id
-    timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
+
+    # Convert the timestamp to your desired timezone
+    desired_tz = pytz.timezone(TIMEZONE)  # replace with your timezone 
+    utc_time = message.created_at.replace(tzinfo=pytz.utc)  # Specify that this is a UTC datetime
+    local_time = utc_time.astimezone(desired_tz)
+    timestamp = local_time.strftime("%Y-%m-%d %H:%M") # to add seconds - ("%Y-%m-%d %H:%M:%S")
+
     message_entry = f"{timestamp} | {message.author.display_name}: {message.content}"
     local_history[channel_id].append(message_entry)
     last_message_id[channel_id] = message.id
@@ -109,15 +138,22 @@ async def abed(ctx, *, question):
 
     # Truncate the conversation to fit within the model's maximum token limit
     conversation = conversation[-MAX_TOKENS:]
+    logging.info(f'CONVERSATION:\n{conversation}')
+    
+    # Read the prompt from the file
+    rules = read_prompt('config/rules.txt')
 
     # Define the prompt
-    prompt = f'{conversation}\n{ctx.message.author.display_name}: {question}'
-    # Use OpenAI to generate a response to the question
+    prompt = f'{rules}\n{conversation}\nAbed:'
+    # prompt = f'{rules}\n{conversation}\n{ctx.message.author.display_name}: {question}\nAbed:'
+    logging.info(f'PROMPT:\n{prompt}') 
 
+
+    # Use OpenAI to generate a response to the question
     response = openai.Completion.create(
         engine="text-davinci-003",
         prompt=prompt,
-        max_tokens=250,
+        max_tokens=350,
         n=1,
         stop=None,
         temperature=0.7, # (0.1), the response is more focused and concise. (0.5), the answer is more detailed and covers more destinations. (1.0),more creative and provides richer descriptions
@@ -131,7 +167,19 @@ async def abed(ctx, *, question):
     if not reply:
         reply = "Sorry, I glitched for a moment. Please ask again"
 
+    if "what time is it" in question.lower():
+        # Get the current time in the desired timezone
+        desired_tz = pytz.timezone(TIMEZONE)
+        current_time = datetime.datetime.now(desired_tz)
+
+        # Format the time
+        formatted_time = current_time.strftime("%H:%M")
+
+        # Add the time to the reply
+        reply = f"The current time is {formatted_time}."
+
     # Send the response as a message
+    logging.info(f'REPLY: {reply}\nEND OF CODE, STANDING BY') 
     await ctx.send(reply)
         
 # Run the bot

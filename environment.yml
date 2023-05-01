@@ -7,4 +7,5 @@ dependencies:
       - discord-py
       - openai
       - aiohttp
+      - pytz
 prefix: /Users/hugo-mba/anaconda3/envs/discord-bot
