@@ -18,7 +18,7 @@ with open('config/secrets.json', 'r') as f:
 DISCORD_BOT_TOKEN = secrets["DISCORD_BOT_TOKEN"]
 DISCORD_CHANNEL_ID = secrets["DISCORD_CHANNEL_ID"]
 openai.api_key = secrets["OPENAI_API_KEY"]
-MAX_TOKENS = 4096  # Or whatever maximum token limit you want to set - 4096 MAX , 250 ANSWER
+MAX_CHARACTERS = 10000  # 18000 max Or whatever maximum token limit you want to set
 TIMEZONE = secrets["TIMEZONE"]
 
 # Set up logging to output information about the bot's actions and events
@@ -50,35 +50,24 @@ def read_prompt(file_name):
 # Function to fetch and update the channel history
 async def fetch_and_update_channel_history(channel_id):
     channel = bot.get_channel(channel_id)
-#2    # last_id = last_message_id.get(channel_id)
-    # if last_id:
-    #     after = discord.Object(id=last_id)
-    # else:
-    #     after = None
    
     # Initialize a temporary list to hold the new history
     new_history = []
 
     # Use the .history() method without the after parameter, and set the limit to xxx
-    async for message in channel.history(limit=100):  # change limit to go back x in time - None for no limit
+    async for message in channel.history(limit=None):  # change limit to go back x in time - None for no limit
 
         # Convert the timestamp to your desired timezone
         desired_tz = pytz.timezone(TIMEZONE)  # replace with your timezone 
         utc_time = message.created_at.replace(tzinfo=pytz.utc)  # Specify that this is a UTC datetime
         local_time = utc_time.astimezone(desired_tz)
         timestamp = local_time.strftime("%Y-%m-%d %H:%M") # to add seconds - ("%Y-%m-%d %H:%M:%S")
-        logging.info(f"FETCHING: {timestamp} | {message.author.display_name}: {message.content}") 
 
- ##1       timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
         message_entry = f"{timestamp} | {message.author.display_name}: {message.content}"
         new_history.append(message_entry)
 
     # Reverse the new_history list to keep messages in chronological order
     new_history.reverse()
-
-   #2     # if message_entry not in local_history[channel_id]:
-        #     local_history[channel_id].append(message_entry)
-        #     last_message_id[channel_id] = message.id
 
     # Replace the old history with the new history
     local_history[channel_id] = new_history
@@ -137,7 +126,7 @@ async def abed(ctx, *, question):
     conversation = '\n'.join(local_history[ctx.channel.id])
 
     # Truncate the conversation to fit within the model's maximum token limit
-    conversation = conversation[-MAX_TOKENS:]
+    conversation = conversation[-MAX_CHARACTERS:]
     logging.info(f'CONVERSATION:\n{conversation}')
     
     # Read the prompt from the file
@@ -150,18 +139,21 @@ async def abed(ctx, *, question):
 
 
     # Use OpenAI to generate a response to the question
-    response = openai.Completion.create(
-        engine="text-davinci-003", 
-        prompt=prompt, # This is the text that you want the AI to complete. The AI will read this text and generate a completion based on it.
-        max_tokens=350, #150 This is the maximum number of tokens (roughly, words) that the AI will generate.
-        n=1, #1 This stands for the number of completions to generate for each prompt. 1 = 1 reply, 3 = 3 replies
+    response = openai.ChatCompletion.create(
+        model="gpt-4", 
+        messages=[
+            {"role":"user","content":prompt}
+        ],
+        max_tokens=500, # This is the maximum number of tokens (roughly, words) that the AI will generate.
         temperature=0.9, #0.9 This is a measure of the randomness of the AI's output. Higher values (closer to 1) make the output more random, while lower values (closer to 0) make it more deterministic.
         stop=["Abed:"], # This is a sequence or list of sequences where the API should stop generating further tokens. The model will stop as soon as it generates any of these sequences.
         frequency_penalty=0.5, #0.0 This adjusts the likelihood of the AI using common phrases or ideas. A high penalty (near 1) discourages common responses, while a low penalty (near 0) encourages them.
         presence_penalty=0.3, #0.6 This adjusts the likelihood of the AI introducing new concepts or ideas. A high penalty (near 1) discourages new ideas, while a low penalty (near 0) encourages them.
         top_p=1 #1 Also known as nucleus sampling, this parameter is an alternative to temperature and controls the randomness of the AI's output in a slightly different way. It works by having the model only consider a subset of the possible next words -- specifically, the smallest set that has a cumulative probability of at least top_p.
     )
-    reply = response.choices[0].text.strip()
+    logging.info(f'RESPONSE: {response}') 
+
+    reply = response.choices[0].message['content']
 
     # Remove the timestamp and Abed: from the reply
     reply = reply.split('Abed:', 1)[-1].strip()
