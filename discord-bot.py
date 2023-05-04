@@ -150,21 +150,38 @@ async def abed(ctx, *, question):
 
 
     # Use OpenAI to generate a response to the question
-    response = openai.Completion.create(
-        engine="text-davinci-003", 
-        prompt=prompt, # This is the text that you want the AI to complete. The AI will read this text and generate a completion based on it.
+    response = openai.ChatCompletion.create(
+        model="gpt-4", 
+        messages=[
+            {"role":"user","content":prompt}
+        ],
         max_tokens=350, #150 This is the maximum number of tokens (roughly, words) that the AI will generate.
-        n=1, #1 This stands for the number of completions to generate for each prompt. 1 = 1 reply, 3 = 3 replies
         temperature=0.9, #0.9 This is a measure of the randomness of the AI's output. Higher values (closer to 1) make the output more random, while lower values (closer to 0) make it more deterministic.
         stop=["Abed:"], # This is a sequence or list of sequences where the API should stop generating further tokens. The model will stop as soon as it generates any of these sequences.
         frequency_penalty=0.5, #0.0 This adjusts the likelihood of the AI using common phrases or ideas. A high penalty (near 1) discourages common responses, while a low penalty (near 0) encourages them.
         presence_penalty=0.3, #0.6 This adjusts the likelihood of the AI introducing new concepts or ideas. A high penalty (near 1) discourages new ideas, while a low penalty (near 0) encourages them.
         top_p=1 #1 Also known as nucleus sampling, this parameter is an alternative to temperature and controls the randomness of the AI's output in a slightly different way. It works by having the model only consider a subset of the possible next words -- specifically, the smallest set that has a cumulative probability of at least top_p.
     )
-    reply = response.choices[0].text.strip()
+    logging.info(f'RESPONSE: {response}') 
+
+
+
+    # # Use OpenAI to generate a response to the question
+    # response = openai.Completion.create(
+    #     engine="text-davinci-003", 
+    #     prompt=prompt, # This is the text that you want the AI to complete. The AI will read this text and generate a completion based on it.
+    #     max_tokens=350, #150 This is the maximum number of tokens (roughly, words) that the AI will generate.
+    #     n=1, #1 This stands for the number of completions to generate for each prompt. 1 = 1 reply, 3 = 3 replies
+    #     temperature=0.9, #0.9 This is a measure of the randomness of the AI's output. Higher values (closer to 1) make the output more random, while lower values (closer to 0) make it more deterministic.
+    #     stop=["Abed:"], # This is a sequence or list of sequences where the API should stop generating further tokens. The model will stop as soon as it generates any of these sequences.
+    #     frequency_penalty=0.5, #0.0 This adjusts the likelihood of the AI using common phrases or ideas. A high penalty (near 1) discourages common responses, while a low penalty (near 0) encourages them.
+    #     presence_penalty=0.3, #0.6 This adjusts the likelihood of the AI introducing new concepts or ideas. A high penalty (near 1) discourages new ideas, while a low penalty (near 0) encourages them.
+    #     top_p=1 #1 Also known as nucleus sampling, this parameter is an alternative to temperature and controls the randomness of the AI's output in a slightly different way. It works by having the model only consider a subset of the possible next words -- specifically, the smallest set that has a cumulative probability of at least top_p.
+    # )
+    # reply = response.choices[0].content.strip()
 
     # Remove the timestamp and Abed: from the reply
-    reply = reply.split('Abed:', 1)[-1].strip()
+    # reply = reply.split('Abed:', 1)[-1].strip()
 
     # Check if the reply is empty
     if not reply:
