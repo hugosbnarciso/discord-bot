@@ -18,7 +18,7 @@ with open('config/secrets.json', 'r') as f:
 DISCORD_BOT_TOKEN = secrets["DISCORD_BOT_TOKEN"]
 DISCORD_CHANNEL_ID = secrets["DISCORD_CHANNEL_ID"]
 openai.api_key = secrets["OPENAI_API_KEY"]
-MAX_CHARACTERS = 10000  # 18000 max Or whatever maximum token limit you want to set
+MAX_CHARACTERS = 5000  # 18000 max Or whatever maximum token limit you want to set
 TIMEZONE = secrets["TIMEZONE"]
 
 # Set up logging to output information about the bot's actions and events
